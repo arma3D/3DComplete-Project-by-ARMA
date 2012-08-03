@@ -1,0 +1,1 @@
+/home/alvise/3DComplete-Project-by-ARMA/CMakeFiles/progetto.dir

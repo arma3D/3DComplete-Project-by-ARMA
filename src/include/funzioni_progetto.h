@@ -108,23 +108,23 @@ protected:
 	{
 		normals_ = SurfaceNormals::Ptr (new SurfaceNormals);
 
-		pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> norm_est;
+		pcl::NormalEstimationOMP<pcl::PointXYZRGB, pcl::Normal> norm_est;
 		norm_est.setInputCloud(cloudPointer_);
 		norm_est.setSearchMethod(searchColorMethod_);
 		norm_est.setRadiusSearch(normal_radius_);
-		norm_est.compute (*normals_);
+		norm_est.compute(*normals_);
 	}
 
 	void computeLocalFeatures ()
 	{
 		features_ = LocalFeatures::Ptr (new LocalFeatures);
 
-		pcl::FPFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::FPFHSignature33> fpfh_est;
-		fpfh_est.setInputCloud (cloudPointer_);
-		fpfh_est.setInputNormals (normals_);
-		fpfh_est.setSearchMethod (searchColorMethod_);
-		fpfh_est.setRadiusSearch (feature_radius_);
-		fpfh_est.compute (*features_);
+		pcl::FPFHEstimationOMP<pcl::PointXYZRGB, pcl::Normal, pcl::FPFHSignature33> fpfh_est;
+		fpfh_est.setInputCloud(cloudPointer_);
+		fpfh_est.setInputNormals(normals_);
+		fpfh_est.setSearchMethod(searchColorMethod_);
+		fpfh_est.setRadiusSearch(feature_radius_);
+		fpfh_est.compute(*features_);
 	}
 
 private:
@@ -238,7 +238,7 @@ private:
 		std::vector<DetailedCloud> templates_;
 		DetailedCloud target_;
 
-		// The Sample Consensus Initial Alignment (SAC-IA) registration routine and its parameters
+		// asd
 		pcl::SampleConsensusInitialAlignment<pcl::PointXYZRGB, pcl::PointXYZRGB, pcl::FPFHSignature33> sac_ia_;
 		float min_sample_distance_;
 		float max_correspondence_distance_;
