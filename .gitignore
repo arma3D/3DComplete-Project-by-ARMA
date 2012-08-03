@@ -4,3 +4,5 @@ Makefile
 cmake_install.cmake
 Dataset Homework PCL
 change_registration
+output.pcd
+CMakesFiles
