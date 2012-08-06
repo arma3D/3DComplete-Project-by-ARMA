@@ -32,6 +32,7 @@
 #include <pcl/surface/grid_projection.h>
 #include <pcl/surface/gp3.h>
 #include <pcl/keypoints/sift_keypoint.h>
+#include "costanti_progetto.h"
 
 class DetailedCloud
 {
@@ -137,7 +138,7 @@ private:
 	float normal_radius_;
 	float feature_radius_;
 };
-
+//							*** TEMPLATE ALIGNMENT_1
 class TemplateAlignment
 {
 public:
@@ -152,20 +153,25 @@ public:
 		min_sample_distance_(0.05f),
 		max_correspondence_distance_(0.01f*0.01f),
 		nr_iterations_(500)
+		//registration_method_(0)
 	{
-		sac_ia_.setMinSampleDistance (min_sample_distance_);
-		sac_ia_.setMaxCorrespondenceDistance (max_correspondence_distance_);
-		sac_ia_.setMaximumIterations (nr_iterations_);
+		sac_ia_.setMinSampleDistance(min_sample_distance_);
+		sac_ia_.setMaxCorrespondenceDistance(max_correspondence_distance_);
+		sac_ia_.setMaximumIterations(nr_iterations_);
 	}
 
-	TemplateAlignment(float min_sample_distance, float max_correspondence_distance, int nr_iterations) :
-		min_sample_distance_(min_sample_distance),
-		max_correspondence_distance_(max_correspondence_distance),
-		nr_iterations_(nr_iterations)
+	TemplateAlignment(int registration_method) :
+		registration_method_(registration_method)
 	{
-		sac_ia_.setMinSampleDistance (min_sample_distance_);
-		sac_ia_.setMaxCorrespondenceDistance (max_correspondence_distance_);
-		sac_ia_.setMaximumIterations (nr_iterations_);
+		switch(registration_method)
+		{
+			case(SIMPLE_CONSENSUS):
+				TemplateAlignment();
+			break;
+
+			case(RIGID_TRANSFORMATION):
+			break;
+		}
 	}
 
 	~TemplateAlignment (){}
@@ -173,8 +179,16 @@ public:
 	void setTargetCloud(DetailedCloud &target_cloud)
 	{
 		target_ = target_cloud;
-		sac_ia_.setInputTarget (target_cloud.getPointCloud ());
-		sac_ia_.setTargetFeatures (target_cloud.getLocalFeatures ());
+		switch(registration_method_)
+		{
+			case 0:
+				sac_ia_.setInputTarget (target_cloud.getPointCloud ());
+				sac_ia_.setTargetFeatures (target_cloud.getLocalFeatures ());
+			break;
+
+			case 1:
+			break;
+		}
 	}
 
 	// Add the given cloud to the list of template clouds
@@ -199,17 +213,17 @@ public:
 	}
 
 	// Align all of template clouds set by addTemplateCloud to the target specified by setTargetCloud ()
-	void alignAll (std::vector<TemplateAlignment::Result, Eigen::aligned_allocator<Result> > &results)
+	void alignAll(std::vector<TemplateAlignment::Result, Eigen::aligned_allocator<Result> > &results)
 	{
-		results.resize (templates_.size ());
-		for (size_t i = 0; i < templates_.size (); ++i)
+		results.resize(templates_.size());
+		for (size_t i = 0; i < templates_.size(); ++i)
 		{
 			align(templates_[i], results[i]);
 		}
 	}
 
 	// Align all of template clouds to the target cloud to find the one with best alignment score
-	int findBestAlignment (TemplateAlignment::Result &result)
+	int findBestAlignment(TemplateAlignment::Result &result)
 	{
 		// Align all of the templates to the target cloud
 		std::vector<Result, Eigen::aligned_allocator<Result> > results;
@@ -238,7 +252,15 @@ private:
 		std::vector<DetailedCloud> templates_;
 		DetailedCloud target_;
 
-		// asd
+		// Registration method
+		int registration_method_;
+
+		// Registration Methods
+
+		//--- rigid transformation ---
+		pcl::registration::TransformationEstimation<pcl::PointXYZRGB, pcl::PointXYZRGB, Eigen::Matrix4f> rigid_transformation_;
+
+		// Sample cosenus
 		pcl::SampleConsensusInitialAlignment<pcl::PointXYZRGB, pcl::PointXYZRGB, pcl::FPFHSignature33> sac_ia_;
 		float min_sample_distance_;
 		float max_correspondence_distance_;

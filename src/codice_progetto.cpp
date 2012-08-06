@@ -16,7 +16,9 @@
 #include <time.h>
 #include <fstream>
 #include <pcl/console/parse.h>
+
 #include "include/funzioni_progetto.h"
+#include "include/costanti_progetto.h"
 
 using namespace std;
 
