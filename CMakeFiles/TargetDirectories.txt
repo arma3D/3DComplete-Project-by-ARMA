@@ -1,0 +1,2 @@
+/home/alvise/3DComplete-Project-by-ARMA/CMakeFiles/coplanarity.dir
+/home/alvise/3DComplete-Project-by-ARMA/CMakeFiles/progetto.dir

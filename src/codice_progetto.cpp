@@ -17,6 +17,13 @@
 #include <fstream>
 #include <pcl/console/parse.h>
 #include "include/funzioni_progetto.h"
+#include <pcl/registration/registration.h>
+#include <pcl/registration/ndt.h>
+#include <pcl/filters/approximate_voxel_grid.h>
+#include <pcl/visualization/pcl_visualizer.h>
+#include <boost/thread/thread.hpp>
+#include <pcl/registration/icp.h>
+
 
 using namespace std;
 
@@ -98,10 +105,6 @@ int main(int argc, char ** argv)
 	pcl::io::loadPCDFile (argv[2], *target_cloud);
 	pcl::console::print_info ("Loaded %s (%zu points)\n", argv[2], target_cloud->size ());
 
- 	// vettore che conterrà le nuvole da allineare
-	vector<DetailedCloud> object_templates;
-	object_templates.resize(0);
-
 
  	// 								**** REMOVE THE PLANE ****
 	//1.Cloud Segmentation
@@ -113,6 +116,7 @@ int main(int argc, char ** argv)
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr seg_target_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);  
 	pcl::console::print_info ("Target Cloud Segmentation\n");
 	segmentation(target_cloud, seg_target_cloud, distanceThreshold, false);
+
 
 //										**** VOXELLING ****
 	if (voxel)
@@ -140,68 +144,135 @@ int main(int argc, char ** argv)
 	
 //										**** ALIGNMENT ****
 
-	cout  << endl << "**** ALIGNMENT ****" << endl << endl;
-	// inserimento target sull'array
-	DetailedCloud daAllineare(normal_radius, feature_radius);
-	daAllineare.setInputCloud(seg_target_cloud);
-	object_templates.push_back(daAllineare);
-
-	// Assign to the target DetailedCloud
-	DetailedCloud target_detailed_cloud;
-	target_detailed_cloud.setInputCloud(seg_source_cloud);
-
-	// Set the TemplateAlignment inputs
-	TemplateAlignment template_align(min_sample_distance, max_correspondence_distance, nr_iterations);
-	for (size_t i = 0; i < object_templates.size (); ++i)
-	{
-		template_align.addTemplateCloud(object_templates[i]);
-	}
-	template_align.setTargetCloud(target_detailed_cloud);
-
-	// Find the best template alignment
-	cout << "find alignment" << endl;
-
-	TemplateAlignment::Result best_alignment;
-	int best_index = template_align.findBestAlignment(best_alignment);
-	const DetailedCloud &best_template = object_templates[best_index];
-	cout << "end alignment" << endl;
-
-	// Print the alignment fitness score (values less than 0.00002 are good)
-	printf("Best fitness score: %f\n", best_alignment.fitness_score);
-
-	// Print the rotation matrix and translation vector
-	Eigen::Matrix3f rotation = best_alignment.final_transformation.block<3,3>(0, 0);
-	Eigen::Vector3f translation = best_alignment.final_transformation.block<3,1>(0, 3);
-
-	printf ("\n");
-	printf ("    | %6.3f %6.3f %6.3f | \n", rotation (0,0), rotation (0,1), rotation (0,2));
-	printf ("R = | %6.3f %6.3f %6.3f | \n", rotation (1,0), rotation (1,1), rotation (1,2));
-	printf ("    | %6.3f %6.3f %6.3f | \n", rotation (2,0), rotation (2,1), rotation (2,2));
-	printf ("\n");
-	printf ("t = < %0.3f, %0.3f, %0.3f >\n", translation (0), translation (1), translation (2));
-
-	// Save the aligned template for visualization
-	pcl::PointCloud<pcl::PointXYZRGB> transformed_cloud;
-
-	pcl::transformPointCloud(*best_template.getPointCloud(), transformed_cloud, best_alignment.final_transformation);
-	pcl::io::savePCDFileBinary("output.pcd", transformed_cloud);
-
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformed_cloud_pointer = transformed_cloud.makeShared();
-
-	pcl::visualization::PCLVisualizer viewerAligned;
-	visualizeTwo(&viewerAligned, "source", "target aligned", seg_source_cloud, transformed_cloud_pointer);
-	while(!viewerAligned.wasStopped())
-	{
-		viewerAligned.spin();
-	}
-
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr unione (new pcl::PointCloud<pcl::PointXYZRGB>); 
-	(*unione) = transformed_cloud + (*seg_source_cloud);
 	
-	pcl::visualization::PCLVisualizer vis;
-	vis.addPointCloud(unione);
-	vis.resetCamera();
-	vis.spin();
+	/*pcl::NormalDistributionsTransform<pcl::PointXYZRGB, pcl::PointXYZRGB> ndt;
+	// Setting scale dependent NDT parameters
+	// Setting minimum transformation difference for termination condition.
+	ndt.setTransformationEpsilon(0.00001);
+	// Setting maximum step size for More-Thuente line search.
+	ndt.setStepSize(0.00001);
+	//Setting Resolution of NDT grid structure (VoxelGridCovariance).
+	ndt.setResolution(200);
+
+	// Setting max number of registration iterations.
+	ndt.setMaximumIterations(35);
+
+	ndt.setInputCloud(seg_source_cloud);
+	ndt.setInputTarget(seg_target_cloud);
+
+	// Set initial alignment estimate found using robot odometry.
+
+
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr output_cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+	cout << "aligning..." << endl;
+	ndt.align(*output_cloud);
+
+	std::cout << "Normal Distributions Transform has converged:" << ndt.hasConverged() << " score: " << ndt.getFitnessScore() << std::endl;
+
+
+
+	// Transforming unfiltered, input cloud using found transform.
+	pcl::transformPointCloud(*seg_source_cloud, *output_cloud, ndt.getFinalTransformation ());
+
+	// Saving transformed input cloud.
+	pcl::io::savePCDFileASCII("room_scan2_transformed.pcd", *output_cloud);
+
+	*/
+
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_in (new pcl::PointCloud<pcl::PointXYZRGB>);
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out (new pcl::PointCloud<pcl::PointXYZRGB>);
+
+cloud_in = seg_source_cloud;
+cloud_out = seg_target_cloud;
+
+ 
+/*  pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
+  icp.setInputCloud(cloud_in);
+  icp.setInputTarget(cloud_out);
+  pcl::PointCloud<pcl::PointXYZRGB> Final;
+  icp.setMaxCorrespondenceDistance(4);
+  icp.setMaximumIterations(50);
+  icp.setTransformationEpsilon(1e-6);
+  clock_t start,end;
+  double time;
+  start=clock();
+	
+  icp.align(Final);
+  end=clock();
+  time=((double)(end-start))/CLOCKS_PER_SEC;
+
+  cout<<"Elapsed time for final registration: "<<time<<endl;
+  std::cout << "has converged:" << icp.hasConverged() << " score: " << icp.getFitnessScore() << std::endl;
+  std::cout << icp.getFinalTransformation() << std::endl;
+*/
+
+	RegistrationObj regObj;
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr finalPtr;
+	Eigen::Matrix4f transformationMatrix;
+
+	pcl::visualization::PCLVisualizer viewer;
+	visualizeTwo(&viewer, "cloud_in_before_reg", "cloud_out_before_reg", cloud_in, cloud_out);
+	while (!viewer.wasStopped())
+	{
+			viewer.spinOnce(100);
+			boost::this_thread::sleep(boost::posix_time::microseconds(100000));
+	}
+
+	regObj.setInputCloud(cloud_in);
+	regObj.setTargetCloud(cloud_out);
+
+	cout << "aligning" << endl;
+
+	if(regObj.align(finalPtr))
+	{
+		//finalPtr = regObj.getRegisteredCloud();
+		double timeElapsed = regObj.getTime();
+		transformationMatrix = regObj.getTransformation();
+
+		ofstream out("matrix_result");
+		regObj.writeResult(&out);
+
+		cout << "registered in " << timeElapsed << " seconds" << endl;
+		cout << "transformation matrix:" << endl << transformationMatrix << endl;
+		regObj.visualizeResult();
+	}
+
+	/*cout << "second transformation" << endl;
+
+	regObj.alignWithMatrix(cloud_out);
+
+	pcl::visualization::PCLVisualizer viewer_2;
+	visualizeTwo(&viewer_2, "cloud_in", "cloud_out", cloud_in, cloud_out);*/
+
+
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr source_cloud_2 (new pcl::PointCloud<pcl::PointXYZRGB>);
+	pcl::io::loadPCDFile(argv[1], *source_cloud_2);
+	pcl::console::print_info ("Loaded %s (%zu points)\n", argv[1], source_cloud_2->size ());
+
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr target_cloud_2 (new pcl::PointCloud<pcl::PointXYZRGB>);
+	pcl::io::loadPCDFile (argv[2], *target_cloud_2);
+	pcl::console::print_info ("Loaded %s (%zu points)\n", argv[2], target_cloud_2->size ());
+
+
+	pcl::visualization::PCLVisualizer viewer_2;
+	visualizeTwo(&viewer_2, "cloud_in_before_reg", "cloud_out_before_reg", source_cloud_2, target_cloud_2);
+	while (!viewer_2.wasStopped())
+	{
+			viewer_2.spinOnce(100);
+			boost::this_thread::sleep(boost::posix_time::microseconds(100000));
+	}
+
+
+	regObj.alignWithMatrix(source_cloud_2);
+
+	pcl::visualization::PCLVisualizer viewer_3;
+	visualizeTwo(&viewer_3, "cloud_in_before_reg", "cloud_out_before_reg", source_cloud_2, target_cloud_2);
+	while (!viewer_3.wasStopped())
+	{
+			viewer_3.spinOnce(100);
+			boost::this_thread::sleep(boost::posix_time::microseconds(100000));
+	}
 
 	return 0;	
 }

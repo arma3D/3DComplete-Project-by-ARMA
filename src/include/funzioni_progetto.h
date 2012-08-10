@@ -15,7 +15,7 @@
 #include <pcl/registration/ia_ransac.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/segmentation/sac_segmentation.h>
-#include <pcl/keypoints/harris_keypoint3D.h>
+#include <pcl/keypoints/harris_3d.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
@@ -138,111 +138,118 @@ private:
 	float feature_radius_;
 };
 
-class TemplateAlignment
+class RegistrationObj
 {
 public:
-	struct Result
-	{
-		float fitness_score;
-		Eigen::Matrix4f final_transformation;
-		EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-	};
 
-	TemplateAlignment() :
-		min_sample_distance_(0.05f),
-		max_correspondence_distance_(0.01f*0.01f),
-		nr_iterations_(500)
+	RegistrationObj() :
+		max_correspondence_distance_(4),
+		maximum_iterations_(50),
+		trasformation_epsilon_(1e-6)
 	{
-		sac_ia_.setMinSampleDistance (min_sample_distance_);
-		sac_ia_.setMaxCorrespondenceDistance (max_correspondence_distance_);
-		sac_ia_.setMaximumIterations (nr_iterations_);
+		icp_.setMaxCorrespondenceDistance(max_correspondence_distance_);
+		icp_.setMaximumIterations(maximum_iterations_);
+		icp_.setTransformationEpsilon(trasformation_epsilon_);
 	}
 
-	TemplateAlignment(float min_sample_distance, float max_correspondence_distance, int nr_iterations) :
-		min_sample_distance_(min_sample_distance),
+	RegistrationObj(float max_correspondence_distance, int maximum_iterations, float trasformation_epsilon) :
 		max_correspondence_distance_(max_correspondence_distance),
-		nr_iterations_(nr_iterations)
+		maximum_iterations_(maximum_iterations),
+		trasformation_epsilon_(trasformation_epsilon)
 	{
-		sac_ia_.setMinSampleDistance (min_sample_distance_);
-		sac_ia_.setMaxCorrespondenceDistance (max_correspondence_distance_);
-		sac_ia_.setMaximumIterations (nr_iterations_);
+		icp_.setMaxCorrespondenceDistance(max_correspondence_distance);
+		icp_.setMaximumIterations(maximum_iterations);
+		icp_.setTransformationEpsilon(trasformation_epsilon);
 	}
 
-	~TemplateAlignment (){}
+	~RegistrationObj(){}
 
-	void setTargetCloud(DetailedCloud &target_cloud)
+	void setTargetCloud(pcl::PointCloud<pcl::PointXYZRGB>::Ptr target_cloud)
 	{
-		target_ = target_cloud;
-		sac_ia_.setInputTarget (target_cloud.getPointCloud ());
-		sac_ia_.setTargetFeatures (target_cloud.getLocalFeatures ());
+		target_cloud_ = target_cloud;
+		icp_.setInputTarget(target_cloud);
 	}
 
-	// Add the given cloud to the list of template clouds
-	void addTemplateCloud(DetailedCloud &template_cloud)
+	void setInputCloud(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud)
 	{
-		templates_.push_back (template_cloud);
+		input_cloud_ = input_cloud;
+		icp_.setInputCloud(input_cloud);
 	}
 
-	// Align the given template cloud to the target specified by setTargetCloud ()
-	void align(DetailedCloud &template_cloud, TemplateAlignment::Result &result)
+	bool align(pcl::PointCloud<pcl::PointXYZRGB>::Ptr final)
 	{
-		sac_ia_.setInputCloud (template_cloud.getPointCloud ());
-		sac_ia_.setSourceFeatures (template_cloud.getLocalFeatures ());
+		//pcl::PointCloud<pcl::PointXYZRGB> final;
+		clock_t start,end;
 
-		pcl::PointCloud<pcl::PointXYZRGB> registration_output;
+		start = clock();
+		icp_.align(*target_cloud_);
+		end = clock();
+		time_elapsed_ = ((double)(end-start))/CLOCKS_PER_SEC;
 
-		std::cout << "### FUNCTION align() ### aligning with normal radius " << template_cloud.getNormalRadius() << " and feature radius " << template_cloud.getFeatureRadius() << endl;
-		sac_ia_.align(registration_output);
-
-		result.fitness_score = (float)sac_ia_.getFitnessScore(max_correspondence_distance_);
-		result.final_transformation = sac_ia_.getFinalTransformation();
-	}
-
-	// Align all of template clouds set by addTemplateCloud to the target specified by setTargetCloud ()
-	void alignAll (std::vector<TemplateAlignment::Result, Eigen::aligned_allocator<Result> > &results)
-	{
-		results.resize (templates_.size ());
-		for (size_t i = 0; i < templates_.size (); ++i)
+		if(icp_.hasConverged())
 		{
-			align(templates_[i], results[i]);
+			matrice_finale_ = icp_.getFinalTransformation();
+			return true;
+		}
+		else
+			return false;
+	}
+
+	void alignWithMatrix(pcl::PointCloud<pcl::PointXYZRGB>::Ptr toAlign)
+	{
+		transformPointCloud(*toAlign, *toAlign, matrice_finale_);
+	}
+
+	Eigen::Matrix4f getTransformation()
+	{
+		return matrice_finale_;
+	}
+
+	double getTime()
+	{
+		return time_elapsed_;
+	}
+
+	void visualizeResult()
+	{
+		pcl::visualization::PCLVisualizer viewer_final;
+
+		pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> target_color(input_cloud_, 255, 0, 0);
+		viewer_final.addPointCloud<pcl::PointXYZRGB>(input_cloud_, target_color, "target cloud");
+		pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> output_color(target_cloud_, 0, 255, 0);
+		viewer_final.addPointCloud<pcl::PointXYZRGB>(target_cloud_, output_color, "output cloud");
+
+		while (!viewer_final.wasStopped())
+		{
+			viewer_final.spinOnce(100);
+			boost::this_thread::sleep(boost::posix_time::microseconds(100000));
 		}
 	}
 
-	// Align all of template clouds to the target cloud to find the one with best alignment score
-	int findBestAlignment (TemplateAlignment::Result &result)
+	void writeResult(ofstream *out)
 	{
-		// Align all of the templates to the target cloud
-		std::vector<Result, Eigen::aligned_allocator<Result> > results;
-		alignAll(results);
-
-		// Find the template with the best (lowest) fitness score
-		float lowest_score = std::numeric_limits<float>::infinity ();
-		int best_template = 0;
-		for (size_t i = 0; i < results.size (); ++i)
-		{
-		const Result &r = results[i];
-		if (r.fitness_score < lowest_score)
-		{
-			lowest_score = r.fitness_score;
-			best_template = (int) i;
-		}
+		/*out->write((char *)matrice_finale_(0), sizeof(Eigen::Matrix4f(0)));
+		*out.flush();*/
 	}
 
-		// Output the best alignment
-		result = results[best_template];
-		return (best_template);
+	void loadResult(ifstream *in)
+	{
+		//in->read((char *)matrice_finale_, sizeof(Eigen::Matrix4f);
 	}
 
 private:
-		// A list of template clouds and the target to which they will be aligned
-		std::vector<DetailedCloud> templates_;
-		DetailedCloud target_;
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr target_cloud_;
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_;
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr final_cloud_;
 
-		// The Sample Consensus Initial Alignment (SAC-IA) registration routine and its parameters
-		pcl::SampleConsensusInitialAlignment<pcl::PointXYZRGB, pcl::PointXYZRGB, pcl::FPFHSignature33> sac_ia_;
-		float min_sample_distance_;
+		Eigen::Matrix4f matrice_finale_;
+
+		double time_elapsed_;
+
+		pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp_;
+		int maximum_iterations_;
 		float max_correspondence_distance_;
-		int nr_iterations_;
+		float trasformation_epsilon_;
 };
 
 void visualizeTwo(pcl::visualization::PCLVisualizer* viewer, string name_1, string name_2, pcl::PointCloud<pcl::PointXYZRGB>::Ptr seg_source_cloud, pcl::PointCloud<pcl::PointXYZRGB>::Ptr seg_target_cloud)
@@ -298,6 +305,8 @@ void segmentation (pcl::PointCloud<pcl::PointXYZRGB>::Ptr source, pcl::PointClou
   extract.filter (*segmented);
   std::vector<int> indices;
   pcl::removeNaNFromPointCloud(*segmented, *segmented, indices);
+
+  cout << "axis" << seg.getAxis() << endl;
    size_t n = source->size ();
     //pcl::console::print_info ("Subtracted %zu points along the detected plane\n", n - segmented->size ());
 	// Visualize the result
