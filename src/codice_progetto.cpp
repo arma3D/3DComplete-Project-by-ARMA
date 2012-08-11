@@ -18,7 +18,7 @@
 #include <pcl/console/parse.h>
 #include "include/funzioni_progetto.h"
 #include <pcl/registration/registration.h>
-#include <pcl/registration/ndt.h>
+
 #include <pcl/filters/approximate_voxel_grid.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <boost/thread/thread.hpp>

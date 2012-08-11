@@ -18,54 +18,38 @@
 #include <pcl/console/parse.h>
 
 #include <pcl/registration/registration.h>
-#include <pcl/registration/ndt.h>
 #include <pcl/filters/approximate_voxel_grid.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <boost/thread/thread.hpp>
 #include <pcl/registration/icp.h>
 
- #include "include/funzioni_progetto.h"
- #include "include/funzioni_segmentation.h"
+#include "include/funzioni_progetto.h"
+#include "include/coplanarity.h"
 
 
 using namespace std;
 
 int main(int argc, char ** argv)
 {
-	if (argc < 3 || pcl::console::find_switch(argc, argv, "-h") || pcl::console::find_switch(argc, argv, "--help")) 
+	if (argc < 2 || pcl::console::find_switch(argc, argv, "-h") || pcl::console::find_switch(argc, argv, "--help")) 
 	{
 		pcl::console::print_info ("Syntax is:  %s source.pcd target.pcd \n", argv[0]);
 		pcl::console::print_info ("Optional: \n");
-		pcl::console::print_info ("--table-dist \n ");
-		pcl::console::print_info ("--ant-dist \n ");
-		pcl::console::print_info ("--eps-angle \n ");
 		return (1);
 	}
 
 	float distanceThreshold_table = 1.8f;
 	float distanceThreshold_ant = 0.5f;
-	float eps_angle = 0.5f;
-
-	pcl::console::parse_argument (argc, argv, "--table-dist",  distanceThreshold_table);
-	cout << "table segmentation distance: " << distanceThreshold_table << endl;
-
-	pcl::console::parse_argument (argc, argv, "--ant-dist",  distanceThreshold_ant);
-	cout << "antenna segmentation distance: " << distanceThreshold_ant << endl;
-
-	pcl::console::parse_argument (argc, argv, "--eps-angle",  eps_angle);
-	cout << "epsilon angle: " << eps_angle << endl;
-
-	
+	float eps_angle = 0.5f;	
 	
 /* ################################################################################################################## */
 
-
-
-
-	// Load the input file
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
 	pcl::io::loadPCDFile(argv[1], *cloud);
 	pcl::console::print_info("Loaded %s (%zu points)\n", argv[1], cloud->size());
+
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr only_antenna(new pcl::PointCloud<pcl::PointXYZRGB>);
+	pcl::io::loadPCDFile(argv[2], *only_antenna);
 
 
  	// 								**** REMOVE THE PLANE ****
@@ -81,41 +65,36 @@ int main(int argc, char ** argv)
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr plane(new pcl::PointCloud<pcl::PointXYZRGB>);  
 	pcl::ModelCoefficients::Ptr plane_coeff (new pcl::ModelCoefficients);
 
-	getPlane(cloud, plane, distanceThreshold_table, false, plane_coeff);
+	//getPlane(cloud, plane, distanceThreshold_table, false, plane_coeff);
+	//get_a_plane(cloud, plane, distanceThreshold_table, false, plane_coeff);
 
+/*
 	std::cerr << "Plane-coefficients table: " << plane_coeff->values[0] << " "
 		<< plane_coeff->values[1] << " "
 		<< plane_coeff->values[2] << " "
 		<< plane_coeff->values[3] << std::endl;	
-
-	Eigen::Vector4f planeVect;
-	float curvature;
-	pcl::computePointNormal(*plane, planeVect, curvature);
-	cout << "vettore piano: " << planeVect << endl;
-
-	Eigen::Vector3f vect;
-	vect(0) = planeVect(0);
-	vect(1) = planeVect(1);
-	vect(2) = planeVect(2);
-
-	/*vect(0) = -1;
-	vect(1) = 2;
-	vect(2) = 30;*/
+*/
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr ant(new pcl::PointCloud<pcl::PointXYZRGB>);
 	pcl::ModelCoefficients::Ptr ant_coeff (new pcl::ModelCoefficients);
-	getAnt(no_table_cloud, ant, distanceThreshold_ant, false, vect, eps_angle, ant_coeff);
+	//getAnt(no_table_cloud, ant, distanceThreshold_ant, false, vect, eps_angle, ant_coeff);
+	//getAnt(only_antenna, ant, distanceThreshold_ant, false, vect, eps_angle, ant_coeff);
+	//get_a_plane(only_antenna, ant, distanceThreshold_ant, false, ant_coeff);
+
+	if(coplanarity(cloud, only_antenna, true))
+		cout << "**** coplanar! ****" << endl;
+	else
+		cout << "**** not coplanar! ****" << endl;	
 	
+/*	
 	std::cerr << "Plane-coefficients antenna: " << ant_coeff->values[0] << " "
 		<< ant_coeff->values[1] << " "
 		<< ant_coeff->values[2] << " "
 		<< ant_coeff->values[3] << std::endl;
+*/
 
-	Eigen::Vector4f antVect;
-	pcl::computePointNormal(*ant, antVect, curvature);
 
-	cout << "plane vect: " << planeVect << endl << "ant vect: " << antVect << endl;
-
+/*
 	pcl::visualization::PCLVisualizer viewer;
 	visualizeTwo(&viewer, "table", "ant", ant, plane);
 	while (!viewer.wasStopped())
@@ -123,8 +102,9 @@ int main(int argc, char ** argv)
 			viewer.spinOnce(100);
 			boost::this_thread::sleep(boost::posix_time::microseconds(100000));
 	}
+*/
 
-
+/*
 
 	int i = 0;
 	int j = 0;
@@ -150,7 +130,7 @@ int main(int argc, char ** argv)
 	float c_plane = plane_coeff->values[2];
 	float d_plane = plane_coeff->values[3];
 
-	int iter = 50;
+	int iter = 30;
 	uint8_t re = 255, gr = 0, bl = 0;
 	uint32_t red = ((uint32_t)re << 16 | (uint32_t)gr << 8 | (uint32_t)bl);
 
@@ -167,32 +147,52 @@ int main(int argc, char ** argv)
 
 	for (i = 1; i < iter; ++i)
 	{ // X
-		x = (-b*j - c*k - d)/a;
-		x_plane = (-(b_plane)*(j*1) - (c_plane)*(k*1) - d_plane)/a_plane;
-		toAdd.x = x;
-		toAdd_.x = x_plane;
+		x = (-b*(j+1000) - c*(k+1000) - d)/a;
+		x_plane = (-(b_plane)*(j) - (c_plane)*(k) - d_plane)/a_plane;
+		if (x>0)
+		{
+			toAdd.x = x;
+		}
+		if (x_plane>0)
+		{
+			toAdd_.x = x_plane;
+		}
 
-		/*cout << "j: " << j <<" k: " << k << endl;
-		cout << "x: " << x << endl;
-		cout << "x plane: " << x_plane << endl;*/
+		//cout << "j: " << j <<" k: " << k << endl;
+		//cout << "x: " << x << endl;
+		//cout << "x plane: " << x_plane << endl;
 
-		for (j = 1; j < iter/**100*/; ++j)
+		for (j = 1; j < (iter)*10; ++j)
 		{ // Y
-			y = (-a*i - c*k - d)/b;
-			y_plane = (-a_plane*(i*1) - c_plane*(k*1) - d_plane)/b_plane;
-			toAdd.y = y;
-			toAdd_.y = y_plane;
+			y = (-a*(i-1000) - c*(k-1000) - d)/b;
+			y_plane = (-a_plane*(i) - c_plane*(k) - d_plane)/b_plane;
+			if (y>0 && x>0)
+			{
+				toAdd.y = y;
+			}
+			if (y_plane>0 && x_plane>0)
+			{
+				toAdd_.y = y_plane;
+			}
 
-			/*cout << "delta_y: " << y - y_plane << endl;*/
+			//cout << "y: " << y << endl;
+			//cout << "y_plane: " << y_plane << endl;
 
-			for (k = 1; k < iter/*/8*/; ++k)
+			for (k = 1; k < (iter)/8; ++k)
 			{ // Z
 				z = (-a*i - b*j - d)/c;
-				z_plane = (-a_plane*(i*1) - b_plane*(j*1) - d_plane)/c_plane;
-				/*cout << "delta_z: " << z - z_plane << endl;*/
+				z_plane = (-a_plane*(i) - b_plane*(j) - d_plane)/c_plane;
+				//cout << "delta_z: " << z - z_plane << endl;
 				
-				toAdd.z = z;				
-				toAdd_.z = z_plane;
+				if (z>0 && y>0 && x>0)
+				{
+					toAdd.z = z;
+				}
+				if (z_plane>0 && y_plane && x_plane)
+				{
+					toAdd_.z = z_plane;
+				}				
+				
 
 				toAdd.rgb = *reinterpret_cast<float*>(&green);
 				toAdd_.rgb = *reinterpret_cast<float*>(&red);
@@ -206,8 +206,8 @@ int main(int argc, char ** argv)
 	vis.addPointCloud(test_plane);
 	vis.resetCamera();
 	vis.spin();
-	/*visualizeTwo(&vis, "primo piano", "secondo piano", test_plane, test_plane_);
-	vis.spin();*/
-
+	//visualizeTwo(&vis, "primo piano", "secondo piano", test_plane, test_plane_);
+	//vis.spin();
+*/
 	return 0;	
 }

@@ -18,8 +18,6 @@ SET(CMAKE_MAKEFILE_DEPENDS
   "/usr/lib/vtk-5.8/VTKConfigVersion.cmake"
   "/usr/lib/vtk-5.8/VTKTargets-debug.cmake"
   "/usr/lib/vtk-5.8/VTKTargets.cmake"
-  "/usr/local/share/pcl-1.7/PCLConfig.cmake"
-  "/usr/local/share/pcl-1.7/PCLConfigVersion.cmake"
   "/usr/share/cmake-2.8/Modules/CMakeCInformation.cmake"
   "/usr/share/cmake-2.8/Modules/CMakeCXXInformation.cmake"
   "/usr/share/cmake-2.8/Modules/CMakeCommonLanguageInclude.cmake"
@@ -40,6 +38,8 @@ SET(CMAKE_MAKEFILE_DEPENDS
   "/usr/share/cmake-2.8/Modules/Platform/Linux-GNU.cmake"
   "/usr/share/cmake-2.8/Modules/Platform/Linux.cmake"
   "/usr/share/cmake-2.8/Modules/Platform/UnixPaths.cmake"
+  "/usr/share/pcl-1.6/PCLConfig.cmake"
+  "/usr/share/pcl-1.6/PCLConfigVersion.cmake"
   )
 
 # The corresponding makefile is:
